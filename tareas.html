@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tareas del Curso</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Google API -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <!-- Íconos Lucide -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body class="bg-gray-100">
+
+    <!-- NAV -->
+    <header class="bg-white shadow-md py-4">
+        <div class="max-w-6xl mx-auto flex items-center justify-between px-4">
+            <h1 class="text-2xl font-bold text-blue-600">📘 Tareas del Curso</h1>
+            <a href="index.html"
+                class="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition">
+                Volver al Perfil
+            </a>
+        </div>
+    </header>
+
+    <!-- MAIN -->
+    <main class="max-w-6xl mx-auto p-6">
+
+        <h2 class="text-xl font-bold text-gray-700 mb-4">📅 Semanas</h2>
+
+        <div id="grid" class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"></div>
+
+    </main>
+
+    <script>
+        const CLIENT_ID = "TU_CLIENT_ID_AQUI";               // <-- REEMPLAZAR
+        const FOLDER_ID = "1xQYJEgpQRbR058mpEA69FpOvq1IT0ydE";          // <-- REEMPLAZAR
+        const SCOPES = "https://www.googleapis.com/auth/drive.file";
+
+        // INIT GOOGLE API
+        gapi.load("client:auth2", () => {
+            gapi.auth2.init({ client_id: CLIENT_ID });
+        });
+
+        async function authenticate() {
+            return gapi.auth2.getAuthInstance().signIn({ scope: SCOPES });
+        }
+
+        async function loadClient() {
+            return gapi.client.load("https://content.googleapis.com/discovery/v1/apis/drive/v3/rest");
+        }
+
+        // SUBIR ARCHIVO A GOOGLE DRIVE
+        async function uploadToDrive(file, week) {
+            await authenticate();
+            await loadClient();
+
+            const metadata = {
+                name: file.name,
+                parents: [FOLDER_ID]
+            };
+
+            const form = new FormData();
+            form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+            form.append("file", file);
+
+            const token = gapi.auth.getToken().access_token;
+
+            const res = await fetch(
+                "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",
+                {
+                    method: "POST",
+                    headers: { "Authorization": "Bearer " + token },
+                    body: form
+                }
+            );
+
+            const data = await res.json();
+            const link = `https://drive.google.com/file/d/${data.id}/view`;
+
+            // Guardar en localStorage
+            localStorage.setItem("week_drive_" + week, JSON.stringify({
+                name: file.name,
+                url: link
+            }));
+
+            alert("✅ Archivo subido correctamente");
+            renderGrid();
+        }
+
+        // Renderizar tarjetas
+        function renderGrid() {
+            const grid = document.getElementById("grid");
+            grid.innerHTML = "";
+
+            for (let i = 1; i <= 16; i++) {
+                const saved = JSON.parse(localStorage.getItem("week_drive_" + i));
+
+                grid.innerHTML += `
+                <div class="bg-white rounded-xl shadow-lg p-5 hover:shadow-xl transition">
+
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-lg font-bold text-gray-700">Semana ${i}</h3>
+                        <span class="text-sm px-2 py-1 bg-blue-100 text-blue-700 rounded-full">S${i}</span>
+                    </div>
+
+                    <p class="text-gray-500 mb-3">
+                        ${saved ? "✅ Archivo: <b>" + saved.name + "</b>" : "No hay archivo subido."}
+                    </p>
+
+                    <input type="file" id="file_${i}"
+                           class="block w-full text-sm text-gray-700 mb-3 cursor-pointer">
+
+                    <button onclick="upload(${i})"
+                        class="w-full py-2 mb-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition">
+                        Subir archivo a Drive
+                    </button>
+
+                    <div class="flex justify-between items-center text-gray-600">
+
+                        <button onclick="viewFile(${i})" class="hover:text-blue-600 transition">
+                            <i data-lucide="eye"></i>
+                        </button>
+
+                        <button onclick="copyLink(${i})" class="hover:text-green-600 transition">
+                            <i data-lucide="copy"></i>
+                        </button>
+
+                        <button onclick="removeFile(${i})" class="hover:text-red-600 transition">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+
+                    </div>
+
+                </div>
+            `;
+            }
+
+            lucide.createIcons();
+        }
+
+        // Acciones
+        function upload(week) {
+            const input = document.getElementById("file_" + week);
+            if (!input.files.length) return alert("Selecciona un archivo primero.");
+            uploadToDrive(input.files[0], week);
+        }
+
+        function viewFile(week) {
+            const saved = JSON.parse(localStorage.getItem("week_drive_" + week));
+            if (!saved) return alert("No hay archivo.");
+            window.open(saved.url, "_blank");
+        }
+
+        function copyLink(week) {
+            const saved = JSON.parse(localStorage.getItem("week_drive_" + week));
+            if (!saved) return alert("No hay archivo.");
+            navigator.clipboard.writeText(saved.url);
+            alert("✅ Enlace copiado");
+        }
+
+        function removeFile(week) {
+            localStorage.removeItem("week_drive_" + week);
+            renderGrid();
+        }
+
+        renderGrid();
+    </script>
+
+</body>
+
+</html>
